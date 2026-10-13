@@ -1,0 +1,38 @@
+
+Final regret: median [25%, 75%] over seeds
+
+branin (budget 30)
+  policy     runs  simple regret                    cumulative regret                time/run
+  heuristic    10  7.99e-04 [2.16e-04, 0.00139]     492 [410, 542]                      1.6s
+
+hartmann6 (budget 30)
+  policy     runs  simple regret                    cumulative regret                time/run
+  heuristic    10  0.259 [0.167, 0.546]             57.2 [43.9, 71]                     3.6s
+
+ackley10 (budget 30)
+  policy     runs  simple regret                    cumulative regret                time/run
+  heuristic    10  19.6 [17, 20.1]                  626 [596, 633]                      6.2s
+
+ackley20 (budget 30)
+  policy     runs  simple regret                    cumulative regret                time/run
+  heuristic    10  19.1 [18.8, 20.3]                615 [609, 630]                     10.1s
+
+constrained_hartmann6 (budget 30)
+  policy     runs  simple regret                    cumulative regret                time/run
+  heuristic    10  0.0702 [0.0556, 0.669]           59.2 [46.2, 72.8]                   5.8s
+
+levy10 (budget 30)
+  policy     runs  simple regret                    cumulative regret                time/run
+  heuristic    10  26.2 [17.8, 32]                  2.98e+03 [2.78e+03, 3.19e+03]       3.6s
+
+styblinski_tang8 (budget 30)
+  policy     runs  simple regret                    cumulative regret                time/run
+  heuristic    10  119 [99.5, 136]                  1.04e+04 [8.88e+03, 1.2e+04]        2.5s
+
+reaction_yield (budget 30)
+  policy     runs  simple regret                    cumulative regret                time/run
+  heuristic    10  0.133 [0.121, 0.151]             259 [239, 492]                      2.2s
+
+branin_currin (budget 30)
+  policy     runs  HV regret                        cumulative regret                time/run
+  heuristic    10  2.44 [2.39, 2.62]                753 [683, 814]                      2.9s

@@ -1,0 +1,6 @@
+74 jobs to run
+DONE ackley10__qwen_sara__seed2 evals=30 forced=0 regret=17.02 err=None wall=706s
+DONE ackley20__qwen_sara__seed0 evals=30 forced=0 regret=20.91 err=None wall=723s
+DONE constrained_hartmann6__qwen_sara__seed1 evals=30 forced=0 regret=0.26 err=None wall=862s
+DONE levy10__qwen_sara__seed1 evals=30 forced=0 regret=41.33 err=None wall=1123s
+DONE styblinski_tang8__qwen_sara__seed2 evals=30 forced=0 regret=124.2 err=None wall=406s

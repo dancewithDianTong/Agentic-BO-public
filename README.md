@@ -322,6 +322,71 @@ policy = get_policy("openai", model="Qwen/Qwen3-32B", base_url="http://localhost
   check `forced_commits` and the `nudges` / `invalid_arguments` usage counters when you
   compare models.
 
+### Experiments with a self-hosted Qwen model
+
+Sara has been run on **Qwen3.8-27b** served behind an OpenAI-compatible endpoint
+(SGLang behind LiteLLM, 262K context, reasoning returned in `reasoning_content`), through
+`OpenAISaraPolicy` with `max_completion_tokens=16384`. The endpoint's base URL and key are
+read from environment variables (`DLS_2026_BASE_URL`, `DLS_2026_API_KEY`) and are never
+stored in this repository.
+
+**Branin, budget 30, 5 seeds** (`results/sara_qwen/`). Qwen drove all 150 evaluations
+itself: no harness fallbacks, nudges, invalid tool calls or truncated outputs.
+
+| Policy | Simple regret (median) | Cumulative regret (median) |
+|---|---|---|
+| Sara-Qwen | 6.7e-05 | 382 |
+| heuristic (scripted Sara) | 3.8e-04 (tie, p = 0.056) | 483 (tie) |
+| fixed_bo | 6.3e-03 (Qwen better, p = 0.008) | 811 (Qwen better, p = 0.008) |
+| sobol | 1.7 | 1607 |
+
+Plots: `results/sara_qwen/comparison_branin30/`. (The plots in
+`results/sara_qwen/baselines_branin30/` contain the baselines only.) Each run took 7-15
+minutes and 0.85-1.45M input tokens; the endpoint reported no prompt caching.
+
+**Paper-protocol problems at budget 30** (`results/paper_protocol_T30/`, in progress). The
+nine problems of `results/paper_protocol` (randomized instances, seeds 0-9), each with a
+budget of 30 because the context grows with every step (about 1-2k tokens per
+evaluation) and the policy has no compaction, so the paper's budgets of 150-200 would
+overflow the 262K window. The comparison uses:
+- Sara-Qwen at budget 30 (`qwen/runs/`; the five Branin runs above are reused for seeds 0-4);
+- the scripted Sara rerun at budget 30 (`heuristic/runs/`), since it adapts its opening
+  and end game to the budget;
+- fixed_bo, sobol and random from `results/paper_protocol` truncated to their first 30
+  evaluations, which is exact because they do not adapt to the budget.
+
+```bash
+pip install -e '.[openai]'
+export DLS_2026_API_KEY=...                      # the endpoint's key (not stored in the repo)
+# start ONCE; resumable: finished runs are skipped, never overwritten
+nohup python -u results/paper_protocol_T30/qwen_driver.py 8 > results/paper_protocol_T30/qwen_driver.log 2>&1 &
+grep -c DONE results/paper_protocol_T30/qwen_driver.log    # progress; ALL_DONE at the end
+python results/paper_protocol_T30/make_report.py           # plots, report.txt, summary.json
+```
+
+- `qwen_driver.py N` runs the missing jobs with `N` campaigns in parallel; never start two
+  drivers at once (they would write the same files).
+- A run that fails (e.g. a wrong key) still saves a result file whose steps were all
+  harness fallbacks, and restarts skip it. `make_report.py` prints a health line with the
+  number of forced commits and policy errors across the Qwen runs: delete the affected
+  files under `qwen/runs/` and start the driver again to redo them.
+- Expect a few hours at 8 in parallel; the 10-20-dimensional problems take 15-30 minutes
+  per run.
+
+**Reading the agent's reasoning.** Every run stores Qwen's reasoning, its tool calls and
+the evaluations in the result file's `log` (entries with `"action_class": "reasoning"`
+hold the thinking text). To read a run step by step:
+
+```bash
+python results/paper_protocol_T30/show_trajectory.py results/paper_protocol_T30/qwen/runs/hartmann6__qwen_sara__seed1.json | less
+python results/paper_protocol_T30/show_trajectory.py <run.json> --step 6     # one step
+python results/paper_protocol_T30/show_trajectory.py <run.json> --full       # untruncated reasoning
+```
+
+The raw API requests and responses, including the full `reasoning_content`, are in
+`qwen/transcripts/<run>.jsonl` (and `results/sara_qwen/*.transcript.jsonl` for the Branin
+runs). The viewer works on any result file, including Claude Sara's.
+
 ## Policies
 
 | Name | Class | What it does |
