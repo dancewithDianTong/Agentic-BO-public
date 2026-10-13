@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agentic-bo"
+version = "0.1.0"
+description = "Agentic Bayesian optimization: an LLM agent (Sara) driving a Bayesian backend (lenz), after arXiv:2608.00316"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = ["numpy>=1.24", "scipy>=1.10"]
+
+[project.optional-dependencies]
+llm = ["anthropic>=0.70"]
+plot = ["matplotlib>=3.7"]
+dev = ["pytest>=7", "matplotlib>=3.7"]
+
+[project.scripts]
+lenz = "agentic_bo.lenz.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["agentic_bo*"]
+
+[tool.setuptools.package-data]
+"agentic_bo.sara" = ["prompts/*.md"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: longer-running benchmark-style tests"]
