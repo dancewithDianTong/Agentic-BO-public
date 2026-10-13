@@ -782,6 +782,20 @@ params, model trust, plan, budget) and that the full trial log stays available v
 
 ---
 
+### 10.1 OpenAI-compatible policy (`sara/policies/openai_llm.py`)
+
+`OpenAISaraPolicy(model, base_url=None, api_key=None, reasoning_effort=None,
+max_completion_tokens=None, temperature=None, parallel_tool_calls=None, extra_body=None,
+context_as_system=None, pricing=None, ...)` runs the same loop over Chat Completions
+(`client.chat.completions.create`, non-streaming, `tool_choice="auto"`, non-strict
+function tools converted from the session's definitions and sorted by name). One leading
+system message holds the prompts; each tool call is answered by its own `tool` message in
+call order; harness text goes in one following `user` message; staged messages are
+committed only with a non-empty reply (append-only). `finish_reason == "length"` runs no
+tool call of that message, `content_filter` or `message.refusal` raises `PolicyError`,
+unparseable arguments get an `INVALID_JSON` answer, server reasoning fields are logged
+but never echoed. No compaction. Registered as `openai` / `openai_llm_only`.
+
 ## 11. Experiments, API, examples
 
 ```python

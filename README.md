@@ -285,12 +285,50 @@ benchmarks ever call the API.
 lenz tools). `examples/dynamic_reconfiguration.py --llm` shows Claude reacting to a
 mid-campaign instruction.
 
+## Running Sara on other models (OpenAI, self-hosted Qwen)
+
+`OpenAISaraPolicy` runs the same agent (prompts, tools, one evaluation per step) over the
+OpenAI **Chat Completions** API, so it also works with any OpenAI-compatible server
+(vLLM, SGLang, Ollama):
+
+```bash
+pip install -e '.[openai]'
+export OPENAI_API_KEY=...            # not needed for a local server
+python examples/run_sara_openai.py --model <openai-model-id> --budget 20
+python examples/run_sara_openai.py --model Qwen/Qwen3-32B --base-url http://localhost:8000/v1
+```
+
+```python
+from agentic_bo.sara.policies import get_policy
+policy = get_policy("openai", model="Qwen/Qwen3-32B", base_url="http://localhost:8000/v1",
+                    extra_body={"chat_template_kwargs": {"enable_thinking": True}})
+```
+
+- `model` is required; `reasoning_effort`, `max_completion_tokens`, `temperature`,
+  `parallel_tool_calls` and `extra_body` are sent only when set.
+- New instructions arrive as `system` messages on the OpenAI API and as
+  `<system-reminder>` blocks inside the user message with a `base_url` (many open-model
+  chat templates accept a system message only first); override with `context_as_system`.
+- Unparseable tool arguments are answered with an `INVALID_JSON` error, and a response cut
+  off by `finish_reason == "length"` runs none of its tool calls.
+- Reasoning text a server returns (`reasoning_content` / `reasoning`) is logged to the
+  history `H_t` but not sent back. OpenAI's Chat Completions API returns no reasoning text.
+- Cost is estimated only if you pass `pricing=(input, output, cached input)` USD per million
+  tokens.
+- There is no server-side compaction, so very long campaigns can outgrow a model's context
+  window. With vLLM, enable tool calling (`--enable-auto-tool-choice --tool-call-parser
+  hermes` for Qwen); with Ollama, raise the context length (the prompts alone are ~8k
+  tokens). Smaller models make more invalid calls and trigger more harness fallbacks, so
+  check `forced_commits` and the `nudges` / `invalid_arguments` usage counters when you
+  compare models.
+
 ## Policies
 
 | Name | Class | What it does |
 |---|---|---|
 | `sara` | `ClaudeSaraPolicy` | Claude with the full toolset: the paper's agent |
 | `llm_only` | `ClaudeSaraPolicy(toolset="llm_only")` | Claude proposes configs directly from the trial log, without surrogate or acquisition (ablation) |
+| `openai` / `openai_llm_only` | `OpenAISaraPolicy` | The same two agents on an OpenAI-compatible chat model (OpenAI API, or vLLM/SGLang/Ollama via `base_url`) |
 | `heuristic` | `HeuristicSaraPolicy` | A deterministic scripted agent that follows Sara's directives with the same tools (details below) |
 | `fixed_bo` | `FixedBOPolicy` | Standard BO `Pi_0` (Ax-like): 5 Sobol points, then the top `logEI` candidate every step (EHVI or ParEGO for multiple objectives); never reconfigures |
 | `sobol` | `SobolPolicy` | Scrambled Sobol design |
@@ -414,6 +452,7 @@ the prompts and were not measured here (no API credentials; see Limitations).
 | Script | What it shows |
 |---|---|
 | `examples/quickstart.py` | `optimize` on a custom 3-D function (log-scale, real and integer parameters) with the scripted agent |
+| `examples/run_sara_openai.py` | Sara on an OpenAI-compatible model: the OpenAI API, or a self-hosted Qwen via `--base-url` |
 | `examples/run_sara_claude.py` | Claude Sara on a randomized problem: regret, token usage and cost, transcript, and a FixedBO reference; refuses to run without credentials |
 | `examples/dynamic_reconfiguration.py` | `reaction_yield`: before step 15 the experimenter adds a cost limit. The scripted agent applies the instruction's structured payload (`--llm`: Claude reads the text) and moves to the cheaper region without losing data |
 | `examples/benchmark.py` | A small benchmark of heuristic vs FixedBO vs Sobol, with a report and plots |
@@ -422,8 +461,8 @@ the prompts and were not measured here (no API credentials; see Limitations).
 ## Testing
 
 ```bash
-python -m pytest -q -m 'not slow'      # 907 tests, about 60 s on a laptop
-python -m pytest -q                    # all 911, including the 4 slow benchmark-style tests (+10 s)
+python -m pytest -q -m 'not slow'      # 928 tests, about 60 s on a laptop
+python -m pytest -q                    # all 932, including the 4 slow benchmark-style tests (+10 s)
 ```
 
 The LLM policy is tested against a scripted fake Anthropic client. The tests check:
