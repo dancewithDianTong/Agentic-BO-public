@@ -285,12 +285,141 @@ benchmarks ever call the API.
 lenz tools). `examples/dynamic_reconfiguration.py --llm` shows Claude reacting to a
 mid-campaign instruction.
 
+## Running Sara on other models (OpenAI, self-hosted Qwen)
+
+`OpenAISaraPolicy` runs the same agent (prompts, tools, one evaluation per step) over the
+OpenAI **Chat Completions** API, so it also works with any OpenAI-compatible server
+(vLLM, SGLang, Ollama):
+
+```bash
+pip install -e '.[openai]'
+export OPENAI_API_KEY=...            # not needed for a local server
+python examples/run_sara_openai.py --model <openai-model-id> --budget 20
+python examples/run_sara_openai.py --model Qwen/Qwen3-32B --base-url http://localhost:8000/v1
+```
+
+```python
+from agentic_bo.sara.policies import get_policy
+policy = get_policy("openai", model="Qwen/Qwen3-32B", base_url="http://localhost:8000/v1",
+                    extra_body={"chat_template_kwargs": {"enable_thinking": True}})
+```
+
+- `model` is required; `reasoning_effort`, `max_completion_tokens`, `temperature`,
+  `parallel_tool_calls` and `extra_body` are sent only when set.
+- New instructions arrive as `system` messages on the OpenAI API and as
+  `<system-reminder>` blocks inside the user message with a `base_url` (many open-model
+  chat templates accept a system message only first); override with `context_as_system`.
+- Unparseable tool arguments are answered with an `INVALID_JSON` error, and a response cut
+  off by `finish_reason == "length"` runs none of its tool calls.
+- Reasoning text a server returns (`reasoning_content` / `reasoning`) is logged to the
+  history `H_t` but not sent back. OpenAI's Chat Completions API returns no reasoning text.
+- Cost is estimated only if you pass `pricing=(input, output, cached input)` USD per million
+  tokens.
+- There is no server-side compaction, so very long campaigns can outgrow a model's context
+  window. With vLLM, enable tool calling (`--enable-auto-tool-choice --tool-call-parser
+  hermes` for Qwen); with Ollama, raise the context length (the prompts alone are ~8k
+  tokens). Smaller models make more invalid calls and trigger more harness fallbacks, so
+  check `forced_commits` and the `nudges` / `invalid_arguments` usage counters when you
+  compare models.
+
+### Experiments with a self-hosted Qwen model
+
+Sara has been run on **Qwen3.8-27b** served behind an OpenAI-compatible endpoint
+(SGLang behind LiteLLM, 262K context, reasoning returned in `reasoning_content`), through
+`OpenAISaraPolicy` with `max_completion_tokens=16384`. The endpoint's base URL and key are
+read from environment variables (`DLS_2026_BASE_URL`, `DLS_2026_API_KEY`) and are never
+stored in this repository.
+
+**Branin, budget 30, 5 seeds** (`results/sara_qwen/`). Qwen drove all 150 evaluations
+itself: no harness fallbacks, nudges, invalid tool calls or truncated outputs.
+
+| Policy | Simple regret (median) | Cumulative regret (median) |
+|---|---|---|
+| Sara-Qwen | 6.7e-05 | 382 |
+| heuristic (scripted Sara) | 3.8e-04 (tie, p = 0.056) | 483 (tie) |
+| fixed_bo | 6.3e-03 (Qwen better, p = 0.008) | 811 (Qwen better, p = 0.008) |
+| sobol | 1.7 | 1607 |
+
+Plots: `results/sara_qwen/comparison_branin30/`. (The plots in
+`results/sara_qwen/baselines_branin30/` contain the baselines only.) Each run took 7-15
+minutes and 0.85-1.45M input tokens; the endpoint reported no prompt caching.
+
+**Paper-protocol problems at budget 30** (`results/paper_protocol_T30/`). The
+nine problems of `results/paper_protocol` (randomized instances, seeds 0-9), each with a
+budget of 30 because the context grows with every step (about 1-2k tokens per
+evaluation) and the policy has no compaction, so the paper's budgets of 150-200 would
+overflow the 262K window. The comparison uses:
+- Sara-Qwen at budget 30 (`qwen/runs/`; the five Branin runs above are reused for seeds 0-4);
+- the scripted Sara rerun at budget 30 (`heuristic/runs/`), since it adapts its opening
+  and end game to the budget;
+- fixed_bo, sobol and random from `results/paper_protocol` truncated to their first 30
+  evaluations, which is exact because they do not adapt to the budget.
+
+```bash
+pip install -e '.[openai]'
+export DLS_2026_API_KEY=...                      # the endpoint's key (not stored in the repo)
+# start ONCE; resumable: finished runs are skipped, never overwritten
+nohup python -u results/paper_protocol_T30/qwen_driver.py 8 > results/paper_protocol_T30/qwen_driver.log 2>&1 &
+grep -c DONE results/paper_protocol_T30/qwen_driver.log    # progress; ALL_DONE at the end
+python results/paper_protocol_T30/make_report.py           # plots, report.txt, summary.json
+```
+
+- `qwen_driver.py N` runs the missing jobs with `N` campaigns in parallel; never start two
+  drivers at once (they would write the same files).
+- A run that fails (e.g. a wrong key) still saves a result file whose steps were all
+  harness fallbacks, and restarts skip it. `make_report.py` prints a health line with the
+  number of forced commits and policy errors across the Qwen runs: delete the affected
+  files under `qwen/runs/` and start the driver again to redo them.
+- Expect a few hours at 8 in parallel; the 10-20-dimensional problems take 15-30 minutes
+  per run.
+
+Results (10 seeds per policy; median final regret; outcome vs fixed_bo by two-sided
+Mann-Whitney U, p < 0.05; plots: `regret_simple.png`, `regret_cumulative.png`; full
+table: `report.txt`):
+
+| Problem | Sara-Qwen simple | heuristic simple | fixed_bo simple | Sara-Qwen cumulative vs fixed_bo |
+|---|---|---|---|---|
+| branin | 8.4e-05, **win** | 8.0e-04, tie | 6.3e-03 | 379 vs 679, **win** |
+| hartmann6 | 0.32, tie | 0.26, tie | 0.23 | 53 vs 60, tie |
+| ackley10 | 19.4, tie | 19.6, tie | 20.0 | 613 vs 626, tie |
+| ackley20 | 20.5, tie | 19.1, tie | 19.8 | 632 vs 624, tie |
+| constrained_hartmann6 | 1.68, tie | 0.070, tie | 0.41 | 79 vs 64, tie |
+| levy10 | 26.6, tie | 26.2, tie | 25.8 | 2389 vs 3434, **win** |
+| styblinski_tang8 | 106, tie | 119, tie | 114 | 7898 vs 11740, **win** |
+| reaction_yield | 0.038, **win** | 0.13, **win** | 1.05 | 119 vs 1433, **win** |
+| branin_currin (HV) | 4.78, **loss** | 2.44, tie | 2.37 | 916 vs 728, tie |
+
+Against fixed_bo on simple regret, Sara-Qwen has 2 wins, 6 ties and 1 loss (the scripted
+heuristic: 1 win, 8 ties); on cumulative regret Sara-Qwen wins 5 of 9 and loses none. At 30
+evaluations the hard problems (ackley, levy) are still near their plateaus for every
+model-based policy. reaction_yield gives the agents its natural-language chemistry prior
+(Sara-Qwen reads the text; the heuristic uses the structured `prior_hint`); fixed_bo gets
+no prior, as in the paper's Ax baseline. Health: 90 Sara-Qwen runs (85 here plus the five
+Branin runs above), 0 policy errors, 3 harness-fallback steps in total, all on
+branin_currin, where Qwen's reasoning repeatedly exhausted the 16k output limit within a
+step; it also made those the slowest runs (45-95 min, against 10-30 min elsewhere).
+
+**Reading the agent's reasoning.** Every run stores Qwen's reasoning, its tool calls and
+the evaluations in the result file's `log` (entries with `"action_class": "reasoning"`
+hold the thinking text). To read a run step by step:
+
+```bash
+python results/paper_protocol_T30/show_trajectory.py results/paper_protocol_T30/qwen/runs/hartmann6__qwen_sara__seed1.json | less
+python results/paper_protocol_T30/show_trajectory.py <run.json> --step 6     # one step
+python results/paper_protocol_T30/show_trajectory.py <run.json> --full       # untruncated reasoning
+```
+
+The raw API requests and responses, including the full `reasoning_content`, are in
+`qwen/transcripts/<run>.jsonl` (and `results/sara_qwen/*.transcript.jsonl` for the Branin
+runs). The viewer works on any result file, including Claude Sara's.
+
 ## Policies
 
 | Name | Class | What it does |
 |---|---|---|
 | `sara` | `ClaudeSaraPolicy` | Claude with the full toolset: the paper's agent |
 | `llm_only` | `ClaudeSaraPolicy(toolset="llm_only")` | Claude proposes configs directly from the trial log, without surrogate or acquisition (ablation) |
+| `openai` / `openai_llm_only` | `OpenAISaraPolicy` | The same two agents on an OpenAI-compatible chat model (OpenAI API, or vLLM/SGLang/Ollama via `base_url`) |
 | `heuristic` | `HeuristicSaraPolicy` | A deterministic scripted agent that follows Sara's directives with the same tools (details below) |
 | `fixed_bo` | `FixedBOPolicy` | Standard BO `Pi_0` (Ax-like): 5 Sobol points, then the top `logEI` candidate every step (EHVI or ParEGO for multiple objectives); never reconfigures |
 | `sobol` | `SobolPolicy` | Scrambled Sobol design |
@@ -414,6 +543,7 @@ the prompts and were not measured here (no API credentials; see Limitations).
 | Script | What it shows |
 |---|---|
 | `examples/quickstart.py` | `optimize` on a custom 3-D function (log-scale, real and integer parameters) with the scripted agent |
+| `examples/run_sara_openai.py` | Sara on an OpenAI-compatible model: the OpenAI API, or a self-hosted Qwen via `--base-url` |
 | `examples/run_sara_claude.py` | Claude Sara on a randomized problem: regret, token usage and cost, transcript, and a FixedBO reference; refuses to run without credentials |
 | `examples/dynamic_reconfiguration.py` | `reaction_yield`: before step 15 the experimenter adds a cost limit. The scripted agent applies the instruction's structured payload (`--llm`: Claude reads the text) and moves to the cheaper region without losing data |
 | `examples/benchmark.py` | A small benchmark of heuristic vs FixedBO vs Sobol, with a report and plots |
@@ -422,8 +552,8 @@ the prompts and were not measured here (no API credentials; see Limitations).
 ## Testing
 
 ```bash
-python -m pytest -q -m 'not slow'      # 907 tests, about 60 s on a laptop
-python -m pytest -q                    # all 911, including the 4 slow benchmark-style tests (+10 s)
+python -m pytest -q -m 'not slow'      # 928 tests, about 60 s on a laptop
+python -m pytest -q                    # all 932, including the 4 slow benchmark-style tests (+10 s)
 ```
 
 The LLM policy is tested against a scripted fake Anthropic client. The tests check:

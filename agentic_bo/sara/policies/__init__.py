@@ -4,8 +4,9 @@
     >>> get_policy("fixed_bo", n_init=5)
     FixedBOPolicy(name='fixed_bo')
 
-``heuristic`` and the Claude policies live in their own modules and are imported only
-when requested (the Claude policy needs the optional ``anthropic`` package).
+``heuristic`` and the LLM policies live in their own modules and are imported only
+when requested (the Claude policy needs the optional ``anthropic`` package, the
+OpenAI-compatible policy the optional ``openai`` package).
 """
 
 from __future__ import annotations
@@ -20,17 +21,20 @@ __all__ = ["Policy", "PolicyError", "SobolPolicy", "RandomPolicy", "FixedBOPolic
            "POLICY_NAMES"]
 
 #: names accepted by :func:`get_policy`
-POLICY_NAMES = ("sobol", "random", "fixed_bo", "heuristic", "sara", "llm_only")
+POLICY_NAMES = ("sobol", "random", "fixed_bo", "heuristic", "sara", "llm_only", "openai", "openai_llm_only")
 _ALIASES = {"bo": "fixed_bo", "standard_bo": "fixed_bo", "pi0": "fixed_bo", "pi_0": "fixed_bo",
-            "claude": "sara", "llm": "sara", "heuristic_sara": "heuristic"}
+            "claude": "sara", "llm": "sara", "heuristic_sara": "heuristic",
+            "sara_openai": "openai", "openai_compatible": "openai"}
 
 
 def get_policy(name: str, **kwargs: Any) -> Policy:
     """Build a policy by name.
 
     Names: ``sobol``, ``random``, ``fixed_bo`` (standard BO ``Pi_0``), ``heuristic``
-    (the scripted Sara agent), ``sara`` (Claude with the full tool set) and ``llm_only``
-    (Claude as a direct optimizer, ``toolset="llm_only"``). ``kwargs`` go to the
+    (the scripted Sara agent), ``sara`` (Claude with the full tool set), ``llm_only``
+    (Claude as a direct optimizer, ``toolset="llm_only"``), and ``openai`` /
+    ``openai_llm_only`` (the same two agents on an OpenAI-compatible chat model; pass
+    ``model=...`` and, for a self-hosted server, ``base_url=...``). ``kwargs`` go to the
     policy's constructor. Matching is case-insensitive and ``-`` is accepted for ``_``.
 
     Raises:
@@ -54,4 +58,9 @@ def get_policy(name: str, **kwargs: Any) -> Policy:
         if key == "llm_only":
             kwargs = {**kwargs, "toolset": "llm_only"}
         return ClaudeSaraPolicy(**kwargs)
+    if key in ("openai", "openai_llm_only"):
+        from .openai_llm import OpenAISaraPolicy
+        if key == "openai_llm_only":
+            kwargs = {**kwargs, "toolset": "llm_only"}
+        return OpenAISaraPolicy(**kwargs)
     raise LenzError(f"unknown policy {name!r}; choose one of {', '.join(POLICY_NAMES)}")

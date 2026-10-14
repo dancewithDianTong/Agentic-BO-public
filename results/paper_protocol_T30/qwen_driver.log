@@ -1,0 +1,141 @@
+74 jobs to run
+DONE ackley10__qwen_sara__seed2 evals=30 forced=0 regret=17.02 err=None wall=706s
+DONE ackley20__qwen_sara__seed0 evals=30 forced=0 regret=20.91 err=None wall=723s
+DONE constrained_hartmann6__qwen_sara__seed1 evals=30 forced=0 regret=0.26 err=None wall=862s
+DONE levy10__qwen_sara__seed1 evals=30 forced=0 regret=41.33 err=None wall=1123s
+DONE styblinski_tang8__qwen_sara__seed2 evals=30 forced=0 regret=124.2 err=None wall=406s
+DONE hartmann6__qwen_sara__seed2 evals=30 forced=0 regret=0.283 err=None wall=1383s
+DONE constrained_hartmann6__qwen_sara__seed2 evals=30 forced=0 regret=0.9379 err=None wall=736s
+DONE reaction_yield__qwen_sara__seed2 evals=30 forced=0 regret=0.03305 err=None wall=946s
+DONE levy10__qwen_sara__seed2 evals=30 forced=0 regret=28.23 err=None wall=1459s
+DONE ackley10__qwen_sara__seed3 evals=30 forced=0 regret=14.7 err=None wall=1000s
+DONE hartmann6__qwen_sara__seed3 evals=30 forced=0 regret=1.001 err=None wall=1234s
+DONE ackley20__qwen_sara__seed2 evals=30 forced=0 regret=20.12 err=None wall=3002s
+DONE branin_currin__qwen_sara__seed0 evals=30 forced=0 regret=3.379 err=None wall=3070s
+61 jobs to run
+FAILED styblinski_tang8 seed3 rc=1: ["KeyError: 'DLS_2026_API_KEY'"]
+FAILED branin_currin seed1 rc=1: ["KeyError: 'DLS_2026_API_KEY'"]
+FAILED branin_currin seed2 rc=1: ["KeyError: 'DLS_2026_API_KEY'"]
+FAILED constrained_hartmann6 seed3 rc=1: ["KeyError: 'DLS_2026_API_KEY'"]
+FAILED branin_currin seed3 rc=1: ["KeyError: 'DLS_2026_API_KEY'"]
+FAILED reaction_yield seed3 rc=1: ["KeyError: 'DLS_2026_API_KEY'"]
+FAILED levy10 seed3 rc=1: ["KeyError: 'DLS_2026_API_KEY'"]
+FAILED ackley20 seed3 rc=1: ["KeyError: 'DLS_2026_API_KEY'"]
+FAILED levy10 seed4 rc=1: ["KeyError: 'DLS_2026_API_KEY'"]
+FAILED constrained_hartmann6 seed4 rc=1: ["KeyError: 'DLS_2026_API_KEY'"]
+FAILED ackley20 seed4 rc=1: ["KeyError: 'DLS_2026_API_KEY'"]
+FAILED hartmann6 seed4 rc=1: ["KeyError: 'DLS_2026_API_KEY'"]
+FAILED ackley10 seed4 rc=1: ["KeyError: 'DLS_2026_API_KEY'"]
+FAILED branin_currin seed4 rc=1: ["KeyError: 'DLS_2026_API_KEY'"]
+FAILED styblinski_tang8 seed4 rc=1: ["KeyError: 'DLS_2026_API_KEY'"]
+FAILED reaction_yield seed4 rc=1: ["KeyError: 'DLS_2026_API_KEY'"]
+FAILED ackley10 seed5 rc=1: ["KeyError: 'DLS_2026_API_KEY'"]
+FAILED ackley20 seed5 rc=1: ["KeyError: 'DLS_2026_API_KEY'"]
+FAILED hartmann6 seed5 rc=1: ["KeyError: 'DLS_2026_API_KEY'"]
+FAILED branin seed5 rc=1: ["KeyError: 'DLS_2026_API_KEY'"]
+FAILED reaction_yield seed5 rc=1: ["KeyError: 'DLS_2026_API_KEY'"]
+FAILED levy10 seed5 rc=1: ["KeyError: 'DLS_2026_API_KEY'"]
+FAILED styblinski_tang8 seed5 rc=1: ["KeyError: 'DLS_2026_API_KEY'"]
+FAILED constrained_hartmann6 seed5 rc=1: ["KeyError: 'DLS_2026_API_KEY'"]
+FAILED branin seed6 rc=1: ["KeyError: 'DLS_2026_API_KEY'"]
+FAILED branin_currin seed5 rc=1: ["KeyError: 'DLS_2026_API_KEY'"]
+FAILED hartmann6 seed6 rc=1: ["KeyError: 'DLS_2026_API_KEY'"]
+FAILED ackley20 seed6 rc=1: ["KeyError: 'DLS_2026_API_KEY'"]
+FAILED ackley10 seed6 rc=1: ["KeyError: 'DLS_2026_API_KEY'"]
+FAILED constrained_hartmann6 seed6 rc=1: ["KeyError: 'DLS_2026_API_KEY'"]
+FAILED levy10 seed6 rc=1: ["KeyError: 'DLS_2026_API_KEY'"]
+FAILED styblinski_tang8 seed6 rc=1: ["KeyError: 'DLS_2026_API_KEY'"]
+FAILED branin_currin seed6 rc=1: ["KeyError: 'DLS_2026_API_KEY'"]
+FAILED branin seed7 rc=1: ["KeyError: 'DLS_2026_API_KEY'"]
+FAILED reaction_yield seed6 rc=1: ["KeyError: 'DLS_2026_API_KEY'"]
+FAILED hartmann6 seed7 rc=1: ["KeyError: 'DLS_2026_API_KEY'"]
+FAILED ackley10 seed7 rc=1: ["KeyError: 'DLS_2026_API_KEY'"]
+FAILED ackley20 seed7 rc=1: ["KeyError: 'DLS_2026_API_KEY'"]
+FAILED constrained_hartmann6 seed7 rc=1: ["KeyError: 'DLS_2026_API_KEY'"]
+FAILED levy10 seed7 rc=1: ["KeyError: 'DLS_2026_API_KEY'"]
+FAILED styblinski_tang8 seed7 rc=1: ["KeyError: 'DLS_2026_API_KEY'"]
+FAILED branin_currin seed7 rc=1: ["KeyError: 'DLS_2026_API_KEY'"]
+FAILED branin seed8 rc=1: ["KeyError: 'DLS_2026_API_KEY'"]
+FAILED reaction_yield seed7 rc=1: ["KeyError: 'DLS_2026_API_KEY'"]
+FAILED ackley10 seed8 rc=1: ["KeyError: 'DLS_2026_API_KEY'"]
+FAILED hartmann6 seed8 rc=1: ["KeyError: 'DLS_2026_API_KEY'"]
+FAILED ackley20 seed8 rc=1: ["KeyError: 'DLS_2026_API_KEY'"]
+FAILED constrained_hartmann6 seed8 rc=1: ["KeyError: 'DLS_2026_API_KEY'"]
+FAILED levy10 seed8 rc=1: ["KeyError: 'DLS_2026_API_KEY'"]
+FAILED styblinski_tang8 seed8 rc=1: ["KeyError: 'DLS_2026_API_KEY'"]
+FAILED reaction_yield seed8 rc=1: ["KeyError: 'DLS_2026_API_KEY'"]
+FAILED branin_currin seed8 rc=1: ["KeyError: 'DLS_2026_API_KEY'"]
+FAILED ackley10 seed9 rc=1: ["KeyError: 'DLS_2026_API_KEY'"]
+FAILED branin seed9 rc=1: ["KeyError: 'DLS_2026_API_KEY'"]
+FAILED hartmann6 seed9 rc=1: ["KeyError: 'DLS_2026_API_KEY'"]
+FAILED ackley20 seed9 rc=1: ["KeyError: 'DLS_2026_API_KEY'"]
+FAILED constrained_hartmann6 seed9 rc=1: ["KeyError: 'DLS_2026_API_KEY'"]
+FAILED levy10 seed9 rc=1: ["KeyError: 'DLS_2026_API_KEY'"]
+FAILED styblinski_tang8 seed9 rc=1: ["KeyError: 'DLS_2026_API_KEY'"]
+FAILED reaction_yield seed9 rc=1: ["KeyError: 'DLS_2026_API_KEY'"]
+FAILED branin_currin seed9 rc=1: ["KeyError: 'DLS_2026_API_KEY'"]
+ALL_DONE
+--- restart Tue Oct 13 19:19:30 CDT 2026
+61 jobs to run
+DONE reaction_yield__qwen_sara__seed3 evals=30 forced=0 regret=0.0494 err=None wall=668s
+DONE constrained_hartmann6__qwen_sara__seed3 evals=30 forced=0 regret=0.05208 err=None wall=725s
+DONE ackley20__qwen_sara__seed3 evals=30 forced=0 regret=20.41 err=None wall=1152s
+DONE styblinski_tang8__qwen_sara__seed3 evals=30 forced=0 regret=133.1 err=None wall=1250s
+DONE levy10__qwen_sara__seed3 evals=30 forced=0 regret=8.314 err=None wall=1415s
+DONE hartmann6__qwen_sara__seed4 evals=30 forced=0 regret=0.08254 err=None wall=825s
+DONE ackley10__qwen_sara__seed4 evals=30 forced=0 regret=18.71 err=None wall=1251s
+DONE reaction_yield__qwen_sara__seed4 evals=30 forced=0 regret=0.02312 err=None wall=732s
+DONE styblinski_tang8__qwen_sara__seed4 evals=30 forced=0 regret=125.5 err=None wall=1215s
+DONE ackley20__qwen_sara__seed4 evals=30 forced=0 regret=17.34 err=None wall=1566s
+DONE levy10__qwen_sara__seed4 evals=30 forced=0 regret=26.91 err=None wall=1609s
+DONE constrained_hartmann6__qwen_sara__seed4 evals=30 forced=0 regret=0.3969 err=None wall=1927s
+DONE branin_currin__qwen_sara__seed1 evals=30 forced=0 regret=4.136 err=None wall=3477s
+DONE branin__qwen_sara__seed5 evals=30 forced=0 regret=0.0005467 err=None wall=874s
+DONE branin_currin__qwen_sara__seed3 evals=30 forced=0 regret=3.388 err=None wall=3679s
+DONE hartmann6__qwen_sara__seed5 evals=30 forced=0 regret=0.2217 err=None wall=981s
+DONE ackley10__qwen_sara__seed5 evals=30 forced=0 regret=20.69 err=None wall=857s
+DONE ackley20__qwen_sara__seed5 evals=30 forced=0 regret=20.71 err=None wall=939s
+DONE levy10__qwen_sara__seed5 evals=30 forced=0 regret=26.25 err=None wall=836s
+DONE reaction_yield__qwen_sara__seed5 evals=30 forced=0 regret=0.03825 err=None wall=1055s
+DONE branin__qwen_sara__seed6 evals=30 forced=0 regret=2.964e-05 err=None wall=662s
+DONE branin_currin__qwen_sara__seed2 evals=30 forced=1 regret=3.279 err=None wall=4803s
+DONE hartmann6__qwen_sara__seed6 evals=30 forced=0 regret=0.2512 err=None wall=405s
+DONE constrained_hartmann6__qwen_sara__seed5 evals=30 forced=0 regret=2.269 err=None wall=1355s
+DONE styblinski_tang8__qwen_sara__seed5 evals=30 forced=0 regret=109.1 err=None wall=1384s
+DONE branin_currin__qwen_sara__seed4 evals=30 forced=0 regret=5.953 err=None wall=2623s
+DONE reaction_yield__qwen_sara__seed6 evals=30 forced=0 regret=0.02039 err=None wall=602s
+DONE levy10__qwen_sara__seed6 evals=30 forced=0 regret=23.73 err=None wall=1741s
+DONE styblinski_tang8__qwen_sara__seed6 evals=30 forced=0 regret=91.48 err=None wall=1772s
+DONE branin_currin__qwen_sara__seed5 evals=30 forced=0 regret=2.394 err=None wall=2744s
+DONE ackley10__qwen_sara__seed6 evals=30 forced=0 regret=19.15 err=None wall=2064s
+DONE hartmann6__qwen_sara__seed7 evals=30 forced=0 regret=0.2194 err=None wall=614s
+DONE ackley20__qwen_sara__seed6 evals=30 forced=0 regret=20.17 err=None wall=2726s
+DONE constrained_hartmann6__qwen_sara__seed6 evals=30 forced=0 regret=2.242 err=None wall=2984s
+DONE branin__qwen_sara__seed7 evals=30 forced=0 regret=2.404e-05 err=None wall=2311s
+DONE ackley10__qwen_sara__seed7 evals=30 forced=0 regret=19.38 err=None wall=1430s
+DONE ackley20__qwen_sara__seed7 evals=30 forced=0 regret=20.5 err=None wall=1478s
+DONE styblinski_tang8__qwen_sara__seed7 evals=30 forced=0 regret=103.2 err=None wall=660s
+DONE constrained_hartmann6__qwen_sara__seed7 evals=30 forced=0 regret=2.464 err=None wall=1600s
+DONE reaction_yield__qwen_sara__seed7 evals=30 forced=0 regret=0.03732 err=None wall=755s
+DONE hartmann6__qwen_sara__seed8 evals=30 forced=0 regret=0.3679 err=None wall=825s
+DONE levy10__qwen_sara__seed7 evals=30 forced=0 regret=28.82 err=None wall=1828s
+DONE branin__qwen_sara__seed8 evals=30 forced=0 regret=0.04359 err=None wall=1179s
+DONE ackley10__qwen_sara__seed8 evals=30 forced=0 regret=19.57 err=None wall=1269s
+DONE branin_currin__qwen_sara__seed6 evals=30 forced=1 regret=5.433 err=None wall=4142s
+DONE ackley20__qwen_sara__seed8 evals=30 forced=0 regret=20.6 err=None wall=1330s
+DONE branin__qwen_sara__seed9 evals=30 forced=0 regret=0.005336 err=None wall=289s
+DONE styblinski_tang8__qwen_sara__seed8 evals=30 forced=0 regret=60.08 err=None wall=843s
+DONE levy10__qwen_sara__seed8 evals=30 forced=0 regret=36.34 err=None wall=1160s
+DONE reaction_yield__qwen_sara__seed8 evals=30 forced=0 regret=0.03762 err=None wall=1173s
+DONE hartmann6__qwen_sara__seed9 evals=30 forced=0 regret=0.3921 err=None wall=727s
+DONE constrained_hartmann6__qwen_sara__seed8 evals=30 forced=0 regret=2.879 err=None wall=2511s
+DONE ackley20__qwen_sara__seed9 evals=30 forced=0 regret=20.66 err=None wall=1305s
+DONE ackley10__qwen_sara__seed9 evals=30 forced=0 regret=20.16 err=None wall=1714s
+DONE levy10__qwen_sara__seed9 evals=30 forced=0 regret=19.21 err=None wall=1195s
+DONE reaction_yield__qwen_sara__seed9 evals=30 forced=0 regret=0.2804 err=None wall=579s
+DONE styblinski_tang8__qwen_sara__seed9 evals=30 forced=0 regret=95.26 err=None wall=1572s
+DONE branin_currin__qwen_sara__seed7 evals=30 forced=1 regret=6.277 err=None wall=4366s
+DONE constrained_hartmann6__qwen_sara__seed9 evals=30 forced=0 regret=2.307 err=None wall=3155s
+DONE branin_currin__qwen_sara__seed9 evals=30 forced=0 regret=59.36 err=None wall=2896s
+DONE branin_currin__qwen_sara__seed8 evals=30 forced=0 regret=9.311 err=None wall=5628s
+ALL_DONE

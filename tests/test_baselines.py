@@ -57,13 +57,14 @@ def test_get_policy_names_aliases_and_kwargs():
             get_policy(bad)  # type: ignore[arg-type]
     with pytest.raises(TypeError):
         get_policy("sobol", n_init=3)
-    assert set(POLICY_NAMES) == {"sobol", "random", "fixed_bo", "heuristic", "sara", "llm_only"}
+    assert set(POLICY_NAMES) == {"sobol", "random", "fixed_bo", "heuristic", "sara", "llm_only", "openai",
+                                 "openai_llm_only"}
 
 
 def test_get_policy_imports_optional_modules_lazily(monkeypatch):
     code = ("import sys, agentic_bo.sara, agentic_bo.sara.policies as p; "
             "print(any(m in sys.modules for m in ('agentic_bo.sara.policies.llm', "
-            "'agentic_bo.sara.policies.heuristic', 'anthropic')))")
+            "'agentic_bo.sara.policies.heuristic', 'agentic_bo.sara.policies.openai_llm', 'anthropic', 'openai')))")
     out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True,
                          cwd=str(ROOT), env={**os.environ, "PYTHONPATH": str(ROOT)})
     assert out.stdout.strip() == "False"

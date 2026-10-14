@@ -1,0 +1,2 @@
+[console_scripts]
+lenz = agentic_bo.lenz.cli:main

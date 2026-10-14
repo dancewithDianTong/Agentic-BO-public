@@ -1,0 +1,541 @@
+Metadata-Version: 2.4
+Name: agentic-bo
+Version: 0.1.0
+Summary: Agentic Bayesian optimization: an LLM agent (Sara) driving a Bayesian backend (lenz), after arXiv:2608.00316
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+Requires-Dist: numpy>=1.24
+Requires-Dist: scipy>=1.10
+Provides-Extra: llm
+Requires-Dist: anthropic>=0.70; extra == "llm"
+Provides-Extra: openai
+Requires-Dist: openai>=1.40; extra == "openai"
+Provides-Extra: plot
+Requires-Dist: matplotlib>=3.7; extra == "plot"
+Provides-Extra: dev
+Requires-Dist: pytest>=7; extra == "dev"
+Requires-Dist: matplotlib>=3.7; extra == "dev"
+
+# Agentic BO
+
+A working implementation of **agentic Bayesian optimization** as described in
+
+> Brunzema, Tiao, Le, De Angeli, Xuan, Gligorijevic. *Agentic Bayesian Optimization through
+> Surrogate-Augmented Autoresearch.* arXiv:2608.00316.
+
+In agentic BO, an LLM agent is the decision maker of the optimization loop. At every
+step it decides which probes, reconfigurations and proposals to run and which point to
+evaluate next. A Bayesian backend supplies the surrogate models and acquisition
+functions; the agent consults it, but the backend does not decide for it. The system
+has two halves, and so does this package:
+
+| Paper | Here | Role |
+|---|---|---|
+| **Sara** (LLM agent) | `agentic_bo.sara` | The metalevel policy: Claude through the Anthropic API, a deterministic scripted agent, and the classical baselines, all acting through the same tool interface. |
+| **lenz** (BoTorch backend with a JSON CLI) | `agentic_bo.lenz` | GP surrogates, acquisition functions, a trial log and a command interface that the agent can inspect and reconfigure. Pure numpy/scipy. |
+
+The core task is to optimize a black-box `f: X -> R` sequentially with a budget of `T`
+evaluations, minimizing either **simple regret** `f* - max_t f(x_t)` or **cumulative
+regret** `sum_t (f* - f(x_t))`.
+
+## Contents
+
+- [Install](#install)
+- [Quickstart](#quickstart)
+- [The formal model in code](#the-formal-model-in-code)
+- [Architecture](#architecture)
+- [The agent's tools](#the-agents-tools)
+- [lenz on its own: Python and CLI](#lenz-on-its-own-python-and-cli)
+- [Running Claude Sara](#running-claude-sara)
+- [Policies](#policies)
+- [Regret](#regret)
+- [Benchmarks](#benchmarks)
+- [Examples](#examples)
+- [Testing](#testing)
+- [Limitations](#limitations)
+
+## Install
+
+```bash
+pip install -e '.[llm,plot,dev]'     # Python >= 3.10
+```
+
+The core needs only `numpy` and `scipy`. The extras are optional: `llm` installs the
+`anthropic` SDK for the Claude policy, `plot` installs matplotlib for regret plots, and
+`dev` installs pytest. The examples also run from a source checkout without installing.
+
+## Quickstart
+
+```python
+import math
+from agentic_bo import optimize
+
+def validation_loss(cfg):                      # the black box; lower is better
+    u = math.log10(cfg["learning_rate"]) + 2
+    return 0.1 + 0.3 * u**2 + 2 * (cfg["momentum"] - 0.9)**2 + 0.05 * (cfg["layers"] - 3)**2
+
+space = {
+    "learning_rate": {"type": "real", "lower": 1e-4, "upper": 1.0, "log_scale": True},
+    "momentum": (0.0, 0.99),                    # a (lower, upper) pair is a real parameter
+    "layers": {"type": "int", "lower": 1, "upper": 8},
+}
+result = optimize(validation_loss, space, budget=30, f_star=0.1, verbose=True)
+print(result.best_config, result.best_value, result.simple_regret[-1])
+```
+
+`optimize` wraps `f` into a problem and runs one campaign. The default policy,
+`heuristic`, is the scripted Sara agent and needs no API key; pass `policy="sara"` to have
+Claude drive the loop. Options:
+
+- **Return values.** `f` returns a number (the objective) or a dict of metrics, with the
+  objective under `objective="y"` plus any constraint and other metrics. Return `None` or
+  NaN for a failed measurement.
+- **Direction and regret.** The default is to minimize; pass `maximize=True` otherwise.
+  With `f_star` (the known optimum, if any) you also get regret curves.
+- **Constraints.** `constraints=[{"metric": "c", "upper": 1.0}]`.
+- **Knowledge for the agent.** `description`, plus a `prior` (text, or
+  `{"text", "config", "region"}`). `context` holds user instructions; their structured
+  `data`, such as `{"op": "set_bounds", "args": {...}}`, is applied by the scripted agent.
+- **Noise.** `noise_std` simulates observation noise; regret is always computed from
+  noise-free values.
+- **Errors.** By default, an exception raised by `f` stops the run and is re-raised,
+  before more budget is spent. With `catch_errors=True` it counts as a failed evaluation
+  instead.
+
+The result is a `CampaignResult`. It holds `best_config` and `best_value`, the
+per-evaluation `records`, regret curves, the agent's tool log and reasoning (`log`), its
+`notebook`, and `usage` (tokens and cost for LLM policies). `python examples/quickstart.py`
+runs a variant of this example with an extra ripple along the learning rate; with the
+default seed it reaches a simple regret of about 3e-4 in 30 evaluations, in about 2 s.
+
+## The formal model in code
+
+The paper models agentic BO as a metalevel decision process. The state is
+`s_t^(j) = (D_t, c_t^(j), K_t, H_t^(j))`; `t` counts evaluations and `j` counts the
+computational actions within step `t`.
+
+| Symbol | Meaning | Code |
+|---|---|---|
+| `D_t` | trial log, the single source of truth | `Lenz.frame.trials` (lenz `trials`) |
+| `c_t = (M, alpha, B, O, C)` | configuration: model, acquisition, active region, objectives, constraints | `Lenz.frame.shelf` (lenz `status`) |
+| `K_t` | exogenous context, append-only: the brief, prior knowledge, instructions arriving mid-run | `AgentSession.context` (`CampaignConfig.context`, `context_schedule`) |
+| `H_t` | deliberation history: tool calls, results, reasoning | `AgentSession.log`, plus the LLM transcript |
+
+The action space is `A = A_comp ∪ A_eval ∪ {stop}`:
+
+| Action class | Tools | Effect |
+|---|---|---|
+| probe | `status`, `trials`, `incumbent`, `pareto`, `diagnostics`, `predict`, `score` | read only |
+| reconfigure | `set_bounds`, `set_acqf`, `set_objectives`, `set_constraints` | change `c_t` and never `D_t` |
+| propose | `suggest` | optimizes the acquisition function; records nothing and spends no budget |
+| evaluate | `evaluate` | the only action that advances `t` and spends budget |
+| stop | `stop` | ends the campaign early, if the campaign allows it |
+| note | `record_note` | writes to a lab notebook (memory) |
+
+**One campaign step** is `Rollout(A, s_t^(0))`: the policy takes `k_t >= 0`
+computational actions, then commits exactly one evaluation (or stops). `Campaign.run`
+implements this loop.
+
+Two special cases fall out of the same code:
+- **LLM-as-optimizer.** No backend calls: `toolset="llm_only"`.
+- **Standard BO `Pi_0`.** A fixed configuration that accepts the top proposal every step:
+  `FixedBOPolicy`.
+
+## Architecture
+
+```
+  optimize(f, space, T)         run_campaign / run_benchmark          Problem (black box,
+  (agentic_bo.api)              (agentic_bo.experiment)               regret, brief)
+            \                          |                                   |
+             +------------> Campaign(problem, policy, config) <------------+
+                                       |
+   +-----------------------------------v------------------------------------------------+
+   |  Sara harness (agentic_bo.sara)                                                    |
+   |   loop: inject due context (K_t) -> policy.step(session) -> fallback if no commit |
+   |   AgentSession: schema-validated tools, budget, one evaluation per step,          |
+   |   soft/hard action limits, log H_t, notebook, noise-free scoring records          |
+   |                                                                                    |
+   |   Policy: ClaudeSaraPolicy | HeuristicSaraPolicy | FixedBO | Sobol | Random       |
+   |           (every policy acts only through session.call(tool, args))               |
+   +-------------+--------------------------------------------------+------------------+
+                 | probe / reconfigure / propose                    | evaluate:
+                 v                                                  | submit -> f(x) -> observe
+   +-------------------------------------------------------------------------------------+
+   |  lenz (agentic_bo.lenz)        Lenz: 15 commands, JSON envelopes, save/load        |
+   |   frame.py  Trial / Event / Shelf / Frame  (D_t and c_t, deterministic JSON)       |
+   |   gp.py     exact GP: Matern-5/2 | RBF ARD, MAP fit, LOO, fantasize               |
+   |   acquisition.py  logEI, noisy logEI, EI, (log)PI, UCB, PM, std, TS, EHVI, ParEGO |
+   |   optimize.py     Sobol raw samples + L-BFGS-B, Thompson sampling, trust regions  |
+   |   pareto.py       Pareto masks, hypervolume                                        |
+   |   cli.py    python -m agentic_bo.lenz --study s.json <command> ...                 |
+   +-------------------------------------------------------------------------------------+
+```
+
+## The agent's tools
+
+Every policy sees the same tools. Tool inputs are JSON-schema validated, and
+configuration schemas are generated per problem. Results are compact and in raw metric
+units. An invalid call returns an error envelope; nothing an agent sends can crash a
+campaign.
+
+| Tool | Class | Arguments | What it does |
+|---|---|---|---|
+| `status` | probe | | step, budget, incumbent, lenz configuration, recent notes |
+| `trials` | probe | `last?`, `sort_by?` (`eval_index` or `value`), `limit?` | the trial log; `last` keeps the most recent k before sorting, `limit` the first k after it (`sort_by="value"`, `limit=k`: the k best) |
+| `incumbent` | probe | | best feasible trial and best posterior mean (Pareto summary for multiple objectives) |
+| `pareto` | probe | | feasible Pareto front and hypervolume |
+| `diagnostics` | probe | `metric?` | per-metric GP: LOO CV R², noise, outputscale, lengthscales, sensitivities |
+| `predict` | probe | `configs` (at most 50) | posterior mean and std per metric, P(feasible), acquisition value |
+| `score` | probe | `configs`, `acqfs?` | acquisition values of chosen configs, under several acquisition functions |
+| `set_bounds` | reconfigure | `bounds` or null | active region `B_t` (`{param: [lo, hi]}` or a subset of allowed values) |
+| `set_acqf` | reconfigure | `acqf`, `beta?`, `params?` | `logei`, `noisy_logei`, `ei`, `logpi`, `pi`, `ucb`, `pm`, `std`, `ts`, `ehvi`, `parego`, `sobol`, `random` |
+| `set_objectives` | reconfigure | `objectives` | choose the objective metrics and directions (more than one makes the problem multi-objective) |
+| `set_constraints` | reconfigure | `constraints` | `lower <= metric <= upper` outcome constraints |
+| `suggest` | propose | `q?` (at most 10), `around?`, `radius?`, `bounds?`, `acqf?`, `beta?`, `params?` | candidates from acquisition optimization; `around` gives a trust region around the incumbent or a config; `acqf`, `beta` and `params` apply to this call only |
+| `evaluate` | evaluate | `config`, `rationale`, `expectation?` | spends one evaluation; the rationale states belief and learning goal |
+| `stop` | stop | `reason` | only when `allow_early_stop` is set, after at least one evaluation and before the budget is used up |
+| `record_note` | note | `text` | lab-notebook entry |
+| `create` | setup | space, objectives, ... | only with `agent_setup=True`; rebuilds the study and keeps all trials |
+
+The `llm_only` toolset is `evaluate`, `trials`, `incumbent`, `status`, `record_note`
+(and `stop`). The agent sees no surrogate.
+
+Results keep six significant digits for most floats. Metric values (observed metrics,
+`value`, predicted `mean`) keep ten, so differences on top of a large offset stay
+visible, and config values keep enough digits to be submitted again exactly. Each step
+has a soft and a hard action limit (`soft_actions_per_step=12`,
+`hard_actions_per_step=30`). Past the soft limit, results carry a warning. Past the hard
+limit, every further call in the step, including invalid ones, is replaced by a
+harness fallback evaluation. A valid `evaluate` or `stop` still runs.
+
+## lenz on its own: Python and CLI
+
+```python
+from agentic_bo.lenz import Lenz
+
+lz = Lenz([{"name": "x1", "type": "real", "lower": -5, "upper": 10},
+           {"name": "x2", "type": "real", "lower": 0, "upper": 15}],
+          objectives={"metric": "f", "minimize": True}, seed=0)
+cand = lz.suggest(q=1)["candidates"][0]["config"]      # records nothing
+tid = lz.submit(cand)["trial_id"]                      # pending trial
+lz.observe({"f": 12.3}, trial_id=tid)                  # completed trial; returns the incumbent
+lz.set_acqf("ucb", beta=1.0); lz.suggest(around="incumbent", radius=0.1)
+lz.call("diagnostics")                                 # {"ok": true, "command", "result"} envelope
+lz.save("study.json"); Lenz.load("study.json")         # bit-identical suggestions after reload
+```
+
+The CLI prints exactly one JSON line per call and exits with status 1 on an error
+envelope:
+
+```bash
+python -m agentic_bo.lenz --study s.json create --space '[{"name": "x", "type": "real", "lower": 0, "upper": 1}]' --objectives y
+python -m agentic_bo.lenz --study s.json suggest --q 2
+python -m agentic_bo.lenz --study s.json submit --config '{"x": 0.25}'
+python -m agentic_bo.lenz --study s.json observe --trial-id 0 --metrics '{"y": 1.3}'
+python -m agentic_bo.lenz --study s.json set-acqf --acqf ucb --beta 1
+python -m agentic_bo.lenz --study s.json suggest --around incumbent --radius 0.1
+python -m agentic_bo.lenz --study s.json status
+```
+
+The commands are `create`, `suggest`, `submit`, `observe`, `abandon`, `set-bounds`,
+`set-acqf`, `set-objectives`, `set-constraints`, `diagnostics`, `predict`, `score`,
+`incumbent`, `pareto`, `trials` and `status`. Flags that take JSON also accept `@file`.
+`bash examples/lenz_cli_demo.sh` walks through a full Branin study, with a Python
+one-liner as the black box. The `lenz` console script is installed with the package.
+
+## Running Claude Sara
+
+```bash
+pip install -e '.[llm]'
+export ANTHROPIC_API_KEY=...                  # or ANTHROPIC_AUTH_TOKEN, or an `ant auth login` profile
+python examples/run_sara_claude.py            # randomized Branin, budget 20, effort high
+python examples/run_sara_claude.py --problem hartmann6 --budget 40 --effort medium --verbose
+```
+
+From Python:
+
+```python
+from agentic_bo.experiment import run_campaign
+from agentic_bo.sara.policies import get_policy
+
+policy = get_policy("sara", effort="high", transcript_path="sara.jsonl")    # ClaudeSaraPolicy
+result = run_campaign("branin", policy, seed=0, budget=20)
+print(result.final_simple_regret, result.usage["cost_usd"])
+```
+
+`ClaudeSaraPolicy` request settings (see `agentic_bo/sara/policies/llm.py`):
+
+- **Model.** `claude-opus-5-5`.
+- **Thinking.** Adaptive with summarized display; it is never disabled and never given a
+  token budget. The summaries are logged to `H_t`.
+- **Effort.** `effort` sets `output_config.effort`: `low`, `medium`, `high` (the paper's
+  setting and the default here), `xhigh` or `max`.
+- **Fallbacks.** `use_fallbacks=True` turns on server-side refusal fallbacks
+  (`fallbacks="default"`, beta `server-side-fallback-2026-07-01`).
+- **Compaction.** `use_compaction=True` turns on server-side compaction (beta
+  `compact-2026-01-12`). It triggers at `compaction_trigger_tokens=150_000` input tokens
+  (the API minimum, 50,000, is enforced) and uses `prompts/COMPACTION.md` as
+  instructions. The full trial log stays available through `trials`.
+- **Caching.** `cache=True` freezes the system prompt (`SYSTEM.md` + `LENZ_REF.md`) and
+  the sorted tools with a cache breakpoint, and adds top-level automatic caching for the
+  growing conversation. The history is append-only, so cached prefixes stay valid.
+- **Robustness.** Tool inputs are streamed eagerly and validated by the harness.
+  Unparseable JSON from the stream re-issues the request (capped). `refusal` and API
+  failures end the policy with a `PolicyError`, and the harness finishes the remaining
+  steps with fallback evaluations, which are marked `forced`. Any other exception raised
+  by a policy is handled the same way (`campaign_options={"on_policy_error": "raise"}`
+  re-raises it). A response cut off by `max_tokens` or by the context window never
+  executes its tool calls, since their input may be truncated. Mid-run instructions arrive
+  as `system` messages; items due before the same step share one message.
+- **Limits.** `max_api_calls_per_step=40`, `max_nudges=3`.
+- **Logging.** `transcript_path` writes a JSONL transcript of every request delta and
+  response. `verbose=True` streams the reasoning to stderr.
+
+**Cost.** `result.usage` reports API calls, tokens and an estimated cost at $4 / $20 per
+million input / output tokens, $0.20 for cache reads and $5 for 5-minute cache writes.
+Each step makes one request per assistant turn, typically a few per step. As a rough,
+unmeasured guide, expect a few US dollars for a budget-20 campaign at effort `high`.
+Longer budgets cost more because the context grows (compaction bounds it). Check `usage`
+after a short run before launching a benchmark. Neither the tests nor the default
+benchmarks ever call the API.
+
+`get_policy("llm_only")` runs the LLM-as-optimizer ablation (`SYSTEM_LLM_ONLY.md`, no
+lenz tools). `examples/dynamic_reconfiguration.py --llm` shows Claude reacting to a
+mid-campaign instruction.
+
+## Running Sara on other models (OpenAI, self-hosted Qwen)
+
+`OpenAISaraPolicy` runs the same agent (prompts, tools, one evaluation per step) over the
+OpenAI **Chat Completions** API, so it also works with any OpenAI-compatible server
+(vLLM, SGLang, Ollama):
+
+```bash
+pip install -e '.[openai]'
+export OPENAI_API_KEY=...            # not needed for a local server
+python examples/run_sara_openai.py --model <openai-model-id> --budget 20
+python examples/run_sara_openai.py --model Qwen/Qwen3-32B --base-url http://localhost:8000/v1
+```
+
+```python
+from agentic_bo.sara.policies import get_policy
+policy = get_policy("openai", model="Qwen/Qwen3-32B", base_url="http://localhost:8000/v1",
+                    extra_body={"chat_template_kwargs": {"enable_thinking": True}})
+```
+
+- `model` is required; `reasoning_effort`, `max_completion_tokens`, `temperature`,
+  `parallel_tool_calls` and `extra_body` are sent only when set.
+- New instructions arrive as `system` messages on the OpenAI API and as
+  `<system-reminder>` blocks inside the user message with a `base_url` (many open-model
+  chat templates accept a system message only first); override with `context_as_system`.
+- Unparseable tool arguments are answered with an `INVALID_JSON` error, and a response cut
+  off by `finish_reason == "length"` runs none of its tool calls.
+- Reasoning text a server returns (`reasoning_content` / `reasoning`) is logged to the
+  history `H_t` but not sent back. OpenAI's Chat Completions API returns no reasoning text.
+- Cost is estimated only if you pass `pricing=(input, output, cached input)` USD per million
+  tokens.
+- There is no server-side compaction, so very long campaigns can outgrow a model's context
+  window. With vLLM, enable tool calling (`--enable-auto-tool-choice --tool-call-parser
+  hermes` for Qwen); with Ollama, raise the context length (the prompts alone are ~8k
+  tokens). Smaller models make more invalid calls and trigger more harness fallbacks, so
+  check `forced_commits` and the `nudges` / `invalid_arguments` usage counters when you
+  compare models.
+
+## Policies
+
+| Name | Class | What it does |
+|---|---|---|
+| `sara` | `ClaudeSaraPolicy` | Claude with the full toolset: the paper's agent |
+| `llm_only` | `ClaudeSaraPolicy(toolset="llm_only")` | Claude proposes configs directly from the trial log, without surrogate or acquisition (ablation) |
+| `openai` / `openai_llm_only` | `OpenAISaraPolicy` | The same two agents on an OpenAI-compatible chat model (OpenAI API, or vLLM/SGLang/Ollama via `base_url`) |
+| `heuristic` | `HeuristicSaraPolicy` | A deterministic scripted agent that follows Sara's directives with the same tools (details below) |
+| `fixed_bo` | `FixedBOPolicy` | Standard BO `Pi_0` (Ax-like): 5 Sobol points, then the top `logEI` candidate every step (EHVI or ParEGO for multiple objectives); never reconfigures |
+| `sobol` | `SobolPolicy` | Scrambled Sobol design |
+| `random` | `RandomPolicy` | Uniform random search |
+
+The `heuristic` agent works like this:
+- **Opening.** Adaptive: a prior config, a prior region, or Sobol.
+- **Trust.** Diagnostics gate how far it trusts the surrogate.
+- **Global vs local.** It compares a global candidate with a trust-region candidate.
+- **Trust region.** TuRBO-style radius adaptation.
+- **Stagnation.** Handled with UCB steps or by widening the region.
+- **End game and noise.** End-game exploitation, a cumulative-regret mode, and noise
+  handling.
+- **Context.** Applies structured instructions.
+- **Logging.** A rationale on every evaluation and periodic notebook summaries.
+
+`get_policy(name, **kwargs)` builds any of them, and custom policies subclass
+`agentic_bo.sara.Policy` and implement `step(session)`.
+
+## Regret
+
+Regret is always computed from **noise-free** values in the maximization convention
+(`u = -f` for a minimized objective). `u*` is the known optimum and `u_t` the utility of
+the `t`-th evaluation.
+
+- **Simple regret** `r_t = u* - max_{s <= t, feasible} u_s`. Before the first feasible
+  point it is the regret of the worst point so far, floored at 0 (an infeasible point
+  that beats the constrained optimum earns nothing).
+- **Cumulative regret** `R_t = sum_{s <= t} (u* - u_s)`. An infeasible or failed
+  evaluation is charged `max(u* - u_s, worst regret seen so far, 0)`, so violating a
+  constraint is never cheaper. Failed evaluations before the first finite measurement
+  are charged that measurement's worst regret; both curves are NaN until it arrives.
+- **Multiple objectives.** The "simple" curve is the hypervolume regret
+  `max_hv - HV_t` (feasible points, the problem's reference point; `max_hv` before any
+  feasible point dominates it); the "cumulative" curve is its running sum.
+- **Early stop** (only if allowed). Simple regret keeps its last value. Cumulative regret
+  charges every unused evaluation the regret of the best point found, so stopping cannot
+  game `R_T`.
+
+`CampaignConfig.regret` tells the agent which of the two it is judged by.
+
+## Benchmarks
+
+```bash
+python -m agentic_bo.experiment run --problems branin hartmann6 ackley10 --policies heuristic fixed_bo sobol \
+    --seeds 10 --out results/ --n-jobs 8
+python -m agentic_bo.experiment report --results results/      # table + regret_simple.png / regret_cumulative.png
+python -m agentic_bo.experiment list                           # registered problems and policies
+```
+
+The benchmark follows the paper's protocol:
+- **Randomized instances.** Each seed runs on its own randomized instance of a synthetic
+  problem (paper App. A anti-memorization): canonical `[0, 1]^d` box, anonymous parameter
+  names, a random parameter order, and an optimum shift for functions whose optimum is
+  global.
+- **Exceptions.** `reaction_yield` is not randomized because its prior refers to the real
+  parameter names. Neither are problems with non-real parameters.
+- **Comparisons.** Policies are compared per problem on final regret with a two-sided
+  Mann-Whitney U test; `p >= 0.05` counts as a tie. Small samples get the exact
+  permutation p-value, also when regrets are tied. With 3 or fewer seeds per side no
+  difference can reach significance.
+
+Output:
+- `runs/<problem>__<policy>__seed<k>.json`: one file per run, holding the full
+  `CampaignResult` and its settings. Existing runs are loaded rather than repeated, so an
+  interrupted benchmark resumes.
+- `summary.json`.
+- Plots of the median with a 25-75 % band, one panel per problem.
+
+Non-LLM runs use worker processes; LLM runs always run one at a time. The same functions
+are available from Python: `run_campaign`, `run_benchmark`, `summarize`, `compare`,
+`plot_regret` and `load_results`.
+
+Registered problems:
+- `branin`, `six_hump_camel`, `goldstein_price`, `hartmann3`, `hartmann6`;
+- the families `ackley{d}`, `levy{d}`, `rosenbrock{d}`, `styblinski_tang{d}`,
+  `rastrigin{d}` and `griewank{d}`;
+- `constrained_hartmann6`;
+- `branin_currin` (2 objectives);
+- `reaction_yield` (a 6-D toy flow-chemistry model with a natural-language prior).
+
+Results of the full run, `results/run_paper_protocol.sh` (paper App. A suite and budgets
+plus levy10, styblinski_tang8, reaction_yield and the 2-objective branin_currin; randomized
+instances; 10 seeds; 8 processes, about 25 minutes). Final simple regret (hypervolume regret
+for branin_currin), median [25 %, 75 %] over 10 seeds; outcome against FixedBO by two-sided
+Mann-Whitney U:
+
+| Problem (budget) | heuristic (scripted Sara) | fixed_bo (Ax-like) | sobol | random |
+|---|---|---|---|---|
+| branin (50) | 1.9e-05 [8.0e-06, 1.4e-04], tie | 5.7e-05 [1.5e-05, 9.2e-05] | 0.82, loss | 1.4, loss |
+| hartmann6 (100) | 0.022 [3.2e-05, 0.15], tie | 0.15 [0.030, 0.22] | 1.5, loss | 1.5, loss |
+| ackley10 (150) | 3.9 [3.6, 4.2], **win** (p=0.006) | 7.7 [5.6, 16.5] | 19.4, loss | 19.1, loss |
+| ackley20 (200) | 6.5 [6.2, 8.8], **win** (p=0.002) | 15.8 [11.7, 18.9] | 20.5, loss | 20.5, loss |
+| constrained_hartmann6 (100) | 3.0e-05 [9.2e-06, 5.2e-05], tie | 5.6e-05 [4.4e-05, 0.50] | 2.1, loss | 1.7, loss |
+| levy10 (150) | 3.1 [2.2, 5.6], tie | 3.5 [1.8, 7.4] | 23.8, loss | 29.1, loss |
+| styblinski_tang8 (120) | 51 [42, 60], **win** (p=0.001) | 98 [79, 108] | 111, tie | 108, tie |
+| reaction_yield (40) | 0.082 [0.055, 0.13], **win** (p=0.0003) | 0.77 [0.62, 1.5] | 19, loss | 18, loss |
+| branin_currin (50, HV regret) | 1.08 [1.05, 1.09], tie | 1.04 [1.01, 1.08] | 35.5, loss | 39.8, loss |
+
+Totals against FixedBO: the scripted agent has 4 wins, 5 ties and no losses, and a lower
+median on 8 of 9 problems; Sobol and random search lose on 8. The gains are largest in
+higher dimensions, where trust-region refinement and stagnation handling matter. hartmann6
+is bimodal (seeds either reach ~1e-4 or stall near the 0.1 local optimum), hence its wide
+IQR. On reaction_yield the scripted agent opens from the prior region (`prior_hint`) while
+FixedBO receives no prior, mirroring the paper's setup where Ax gets no problem
+description; the low early regret is the prior's effect. Plots:
+`results/paper_protocol/regret_simple.png` and `regret_cumulative.png`.
+
+Cumulative-regret mode (`--regret cumulative`, the agent is told every evaluation counts):
+
+| Problem (budget) | heuristic: cumulative regret | fixed_bo | heuristic: final simple regret |
+|---|---|---|---|
+| branin (50) | 159 [126, 309], **win** (p=0.0002) | 679 [598, 926] | 1.2e-05 |
+| hartmann6 (100) | 57 [51, 67], **win** (p=0.003) | 131 [126, 150] | 0.13 |
+
+These numbers are for the scripted agent. Claude Sara's results depend on the model and
+the prompts and were not measured here (no API credentials; see Limitations).
+
+## Examples
+
+| Script | What it shows |
+|---|---|
+| `examples/quickstart.py` | `optimize` on a custom 3-D function (log-scale, real and integer parameters) with the scripted agent |
+| `examples/run_sara_openai.py` | Sara on an OpenAI-compatible model: the OpenAI API, or a self-hosted Qwen via `--base-url` |
+| `examples/run_sara_claude.py` | Claude Sara on a randomized problem: regret, token usage and cost, transcript, and a FixedBO reference; refuses to run without credentials |
+| `examples/dynamic_reconfiguration.py` | `reaction_yield`: before step 15 the experimenter adds a cost limit. The scripted agent applies the instruction's structured payload (`--llm`: Claude reads the text) and moves to the cheaper region without losing data |
+| `examples/benchmark.py` | A small benchmark of heuristic vs FixedBO vs Sobol, with a report and plots |
+| `examples/lenz_cli_demo.sh` | The lenz CLI on Branin, driven from bash with a Python one-liner oracle |
+
+## Testing
+
+```bash
+python -m pytest -q -m 'not slow'      # 928 tests, about 60 s on a laptop
+python -m pytest -q                    # all 932, including the 4 slow benchmark-style tests (+10 s)
+```
+
+The LLM policy is tested against a scripted fake Anthropic client. The tests check:
+- the request contract: model, thinking, effort, betas, caching, tools;
+- the append-only history;
+- every stop reason and the error paths.
+
+No test touches the network.
+
+## Limitations
+
+- **Reconstructed prompts.** The paper's `SYSTEM.md` is not public. The prompts in
+  `agentic_bo/sara/prompts/` are reconstructed from its §5.2 directives:
+  - agent-led posture;
+  - adaptive opening;
+  - trust calibration;
+  - strategy revision;
+  - the listed anti-patterns;
+  - a belief and learning goal before each evaluation.
+
+  Claude's behaviour, and therefore its results, can differ from the paper's.
+- **numpy GP instead of BoTorch.** lenz is a self-contained exact GP with BoTorch-like
+  defaults: Matern-5/2 ARD, dimension-scaled lengthscale prior evaluated BoTorch-style
+  (`model={"prior": "botorch"}`, the default; `"median"` is the log-space alternative,
+  see `docs/DESIGN.md` §5 for the A/B that chose it), MAP fit with analytic gradients, and
+  standardized outputs. The differences:
+  - `noisy_logei` approximates NEI with a posterior-mean incumbent;
+  - `q > 1` uses kriging-believer fantasies rather than joint Monte Carlo acquisition;
+  - EHVI supports 2 objectives only;
+  - hypervolume is exact for up to 3 objectives and Monte Carlo above that;
+  - an exact GP is O(n³), comfortable up to a few hundred observations.
+- **LLM runs are not reproducible.** The seed fixes the problem instance, the observation
+  noise and lenz's randomness, but not Claude's samples. Repeat runs differ, so compare
+  policies over several seeds. Transcripts and the tool log record what happened. LLM
+  runs cost money and are never part of the tests or the default benchmarks.
+- **Instructions are outside the regret.** An instruction added mid-run, such as the cost
+  limit in the reconfiguration example, changes the agent's goal but not the problem's
+  regret definition. The example computes its own constrained metrics.
+- **Noise awareness.** The agents learn the noise level from the problem brief. A
+  benchmark's brief states the noise level or says that observations are noiseless. A
+  wrapped user function makes no claim, because it may be noisy by itself. The GP's
+  fitted noise level alone is not a reliable signal, since it also absorbs model misfit.
+
+## Layout
+
+```
+agentic_bo/
+  api.py           optimize(), make_problem()
+  experiment.py    run_campaign, run_benchmark, summarize, compare, plot_regret, CLI
+  metrics.py       regret curves, hypervolume, curve summaries
+  space.py         SearchSpace: real (log), int, ordinal, categorical; encoding to [0, 1]^D
+  problems/        get_problem(), synthetic functions, reaction_yield, randomization
+  lenz/            gp, acquisition, optimize, pareto, frame, engine (Lenz), cli
+  sara/            schema, tools, session (AgentSession, Campaign, CampaignResult), policies/, prompts/
+docs/DESIGN.md     module contracts
+examples/          runnable scripts (see above)
+tests/             pytest suite
+```

@@ -68,7 +68,7 @@ ALPHA = 0.05
 #: categorical colors in fixed order (one per policy, consistent across panels)
 PALETTE = ("#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#4a3aa7", "#e34948")
 _SURFACE, _INK, _INK_2, _MUTED, _GRID, _AXIS = "#fcfcfb", "#0b0b0b", "#52514e", "#898781", "#e1e0d9", "#c3c2b7"
-_LLM_KEYS = {"sara", "llm_only", "claude", "llm"}
+_LLM_KEYS = {"sara", "llm_only", "claude", "llm", "openai", "openai_llm_only", "sara_openai", "openai_compatible"}
 _BLAS_VARS = ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS", "VECLIB_MAXIMUM_THREADS",
               "NUMEXPR_NUM_THREADS")
 _USAGE_KEYS = ("api_calls", "input_tokens", "output_tokens", "cache_read_input_tokens",
@@ -107,7 +107,8 @@ def _is_llm(policy: str | Policy) -> bool:
     if isinstance(policy, str):
         return policy.strip().lower().replace("-", "_") in _LLM_KEYS
     from .sara.policies.llm import ClaudeSaraPolicy
-    return isinstance(policy, ClaudeSaraPolicy)
+    from .sara.policies.openai_llm import OpenAISaraPolicy
+    return isinstance(policy, (ClaudeSaraPolicy, OpenAISaraPolicy))
 
 
 def run_campaign(problem: str | Problem, policy: str | Policy, seed: int = 0, budget: int | None = None,
