@@ -1,0 +1,79 @@
+Final regret: median [25%, 75%] over seeds; vs fixed_bo: two-sided Mann-Whitney U, p < 0.05 (else tie)
+
+branin (budget 30)
+  policy     runs  simple regret                    cumulative regret                time/run  vs fixed_bo
+  fixed_bo     10  0.00567 [0.00219, 0.0118]        679 [597, 844]                      2.4s  (reference)
+  sobol        10  0.839 [0.539, 1.55]              1.41e+03 [1.29e+03, 1.57e+03]       0.1s  loss (p=0.00283)
+  random       10  1.42 [0.605, 3.57]               1.48e+03 [1.25e+03, 1.56e+03]       0.0s  loss (p=0.00283)
+  heuristic    10  7.99e-04 [2.16e-04, 0.00139]     492 [410, 542]                      1.6s  tie (p=0.089)
+  qwen_sara    10  8.44e-05 [3.55e-05, 5.05e-04]    379 [357, 419]                    867.8s  win (p=0.014)
+
+hartmann6 (budget 30)
+  policy     runs  simple regret                    cumulative regret                time/run  vs fixed_bo
+  fixed_bo     10  0.225 [0.173, 0.3]               59.7 [56.8, 63.5]                   8.8s  (reference)
+  sobol        10  1.8 [1.37, 2.27]                 93.2 [91.7, 93.7]                   0.2s  loss (p=0.000183)
+  random       10  2.01 [1.52, 2.32]                93.5 [92.5, 95.1]                   0.1s  loss (p=0.000183)
+  heuristic    10  0.259 [0.167, 0.546]             57.2 [43.9, 71]                     3.6s  tie (p=0.473)
+  qwen_sara    10  0.315 [0.229, 0.386]             53.2 [44.1, 65.7]                 816.0s  tie (p=0.104)
+
+ackley10 (budget 30)
+  policy     runs  simple regret                    cumulative regret                time/run  vs fixed_bo
+  fixed_bo     10  20 [17.5, 20.3]                  626 [594, 632]                     25.6s  (reference)
+  sobol        10  20.4 [19.9, 20.7]                638 [638, 640]                      0.4s  tie (p=0.241)
+  random       10  19.9 [19.4, 20.6]                639 [637, 642]                      0.3s  tie (p=0.678)
+  heuristic    10  19.6 [17, 20.1]                  626 [596, 633]                      6.2s  tie (p=0.678)
+  qwen_sara    10  19.4 [18.8, 20]                  613 [607, 624]                   1291.6s  tie (p=0.521)
+
+ackley20 (budget 30)
+  policy     runs  simple regret                    cumulative regret                time/run  vs fixed_bo
+  fixed_bo     10  19.8 [19.3, 20.2]                624 [619, 628]                     59.1s  (reference)
+  sobol        10  20.7 [20.7, 20.9]                641 [640, 641]                      0.7s  loss (p=0.00283)
+  random       10  20.8 [20.7, 20.9]                641 [640, 642]                      0.5s  loss (p=0.00283)
+  heuristic    10  19.1 [18.8, 20.3]                615 [609, 630]                     10.1s  tie (p=0.427)
+  qwen_sara    10  20.5 [20.2, 20.6]                632 [627, 635]                   1558.5s  tie (p=0.089)
+
+constrained_hartmann6 (budget 30)
+  policy     runs  simple regret                    cumulative regret                time/run  vs fixed_bo
+  fixed_bo     10  0.411 [0.0422, 0.959]            64.1 [53.9, 75.3]                  16.1s  (reference)
+  sobol        10  2.37 [1.89, 2.72]                98 [97.7, 98.2]                     0.2s  loss (p=0.000769)
+  random       10  2.77 [1.86, 2.81]                97.8 [96.7, 98.5]                   0.2s  loss (p=0.00044)
+  heuristic    10  0.0702 [0.0556, 0.669]           59.2 [46.2, 72.8]                   5.8s  tie (p=0.678)
+  qwen_sara    10  1.68 [0.532, 2.3]                79.5 [66.3, 88.4]                1681.8s  tie (p=0.0539)
+
+levy10 (budget 30)
+  policy     runs  simple regret                    cumulative regret                time/run  vs fixed_bo
+  fixed_bo     10  25.8 [17.3, 39.8]                3.43e+03 [3.11e+03, 3.76e+03]      28.2s  (reference)
+  sobol        10  41.9 [34.7, 54.1]                4.34e+03 [4.13e+03, 4.54e+03]       0.5s  tie (p=0.064)
+  random       10  41.3 [35.2, 47.6]                4.41e+03 [4.06e+03, 4.68e+03]       0.3s  tie (p=0.0757)
+  heuristic    10  26.2 [17.8, 32]                  2.98e+03 [2.78e+03, 3.19e+03]       3.6s  tie (p=0.791)
+  qwen_sara    10  26.6 [20.3, 28.7]                2.39e+03 [2.19e+03, 2.49e+03]    1316.6s  tie (p=0.791)
+
+styblinski_tang8 (budget 30)
+  policy     runs  simple regret                    cumulative regret                time/run  vs fixed_bo
+  fixed_bo     10  114 [95.7, 138]                  1.17e+04 [1.09e+04, 1.25e+04]      16.5s  (reference)
+  sobol        10  129 [123, 135]                   1.5e+04 [1.42e+04, 1.56e+04]        0.3s  tie (p=0.241)
+  random       10  139 [128, 154]                   1.52e+04 [1.36e+04, 1.71e+04]       0.2s  loss (p=0.0452)
+  heuristic    10  119 [99.5, 136]                  1.04e+04 [8.88e+03, 1.2e+04]        2.5s  tie (p=0.85)
+  qwen_sara    10  106 [92.4, 121]                  7.9e+03 [6.94e+03, 8.93e+03]     1095.7s  tie (p=0.345)
+
+reaction_yield (budget 30)
+  policy     runs  simple regret                    cumulative regret                time/run  vs fixed_bo
+  fixed_bo     10  1.05 [0.67, 1.69]                1.43e+03 [1.15e+03, 1.57e+03]       3.5s  (reference)
+  sobol        10  20.8 [15, 23.3]                  2.51e+03 [2.48e+03, 2.53e+03]       0.1s  loss (p=0.000583)
+  random       10  25.3 [9.6, 39.2]                 2.51e+03 [2.37e+03, 2.53e+03]       0.1s  loss (p=0.00101)
+  heuristic    10  0.133 [0.121, 0.151]             259 [239, 492]                      2.2s  win (p=0.000583)
+  qwen_sara    10  0.0375 [0.0263, 0.0395]          119 [43.6, 184]                   866.8s  win (p=0.000246)
+
+branin_currin (budget 30)
+  policy     runs  HV regret                        cumulative regret                time/run  vs fixed_bo
+  fixed_bo     10  2.37 [2.33, 2.67]                728 [699, 773]                      6.7s  (reference)
+  sobol        10  53.3 [48.9, 56.7]                1.72e+03 [1.59e+03, 1.76e+03]       0.1s  loss (p=0.000182)
+  random       10  44.2 [34, 54.4]                  1.58e+03 [1.31e+03, 1.72e+03]       0.1s  loss (p=0.000182)
+  heuristic    10  2.44 [2.39, 2.62]                753 [683, 814]                      2.9s  tie (p=0.473)
+  qwen_sara    10  4.78 [3.38, 6.2]                 916 [845, 945]                   3743.0s  loss (p=0.000583)  [0.3 forced commits/run]
+
+Totals vs fixed_bo (simple regret):
+  sobol      0 win(s), 3 tie(s), 6 loss(es)
+  random     0 win(s), 2 tie(s), 7 loss(es)
+  heuristic  1 win(s), 8 tie(s), 0 loss(es)
+  qwen_sara  2 win(s), 6 tie(s), 1 loss(es)
